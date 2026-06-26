@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Save, Phone } from 'lucide-react';
+import { Save, Phone, Plus, X } from 'lucide-react';  // added Plus, X
 import type { MamaFuaProfile, LaundryCenterProfile, ProviderPackage } from '../lib/types';
 
 export default function ProfilePage() {
@@ -12,6 +12,15 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Partial<MamaFuaProfile & LaundryCenterProfile>>({});
   const [packages, setPackages] = useState<ProviderPackage[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // --- New state for adding a package ---
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newPackage, setNewPackage] = useState({
+    package_name: '',
+    description: '',
+    price_tsh: 0,
+  });
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -57,6 +66,31 @@ export default function ProfilePage() {
 
   async function updatePackage(pkg: ProviderPackage) {
     await supabase.from('provider_packages').update({ price_tsh: pkg.price_tsh, is_active: pkg.is_active }).eq('id', pkg.id);
+    loadProfile();
+  }
+
+  // --- New function to add a package ---
+  async function handleAddPackage() {
+    if (!newPackage.package_name.trim() || newPackage.price_tsh <= 0) {
+      alert('Please fill in package name and price.');
+      return;
+    }
+    setAdding(true);
+    const { error } = await supabase.from('provider_packages').insert({
+      provider_id: user!.id,
+      package_name: newPackage.package_name.trim(),
+      description: newPackage.description.trim() || null,
+      price_tsh: newPackage.price_tsh,
+      is_active: true,
+    });
+    setAdding(false);
+    if (error) {
+      alert('Failed to add package: ' + error.message);
+      return;
+    }
+    // Reset form and reload
+    setNewPackage({ package_name: '', description: '', price_tsh: 0 });
+    setShowAddForm(false);
     loadProfile();
   }
 
@@ -178,7 +212,69 @@ export default function ProfilePage() {
 
             {/* Packages */}
             <div className="pt-4 border-t border-gray-100">
-              <h3 className="font-medium text-gray-900 mb-4">Pricing Packages</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-medium text-gray-900">Pricing Packages</h3>
+                <button
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Package
+                </button>
+              </div>
+
+              {/* Add Package Form */}
+              {showAddForm && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3 border border-gray-200">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Package Name *</label>
+                    <input
+                      type="text"
+                      value={newPackage.package_name}
+                      onChange={e => setNewPackage(p => ({ ...p, package_name: e.target.value }))}
+                      placeholder="e.g. Wash & Fold"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <input
+                      type="text"
+                      value={newPackage.description}
+                      onChange={e => setNewPackage(p => ({ ...p, description: e.target.value }))}
+                      placeholder="e.g. Up to 5 kg clothes"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price (TSh) *</label>
+                    <input
+                      type="number"
+                      value={newPackage.price_tsh}
+                      onChange={e => setNewPackage(p => ({ ...p, price_tsh: parseInt(e.target.value) || 0 }))}
+                      placeholder="5000"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => setShowAddForm(false)}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddPackage}
+                      disabled={adding}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-1"
+                    >
+                      {adding ? 'Adding...' : 'Add Package'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Package List */}
               <div className="space-y-3">
                 {packages.map(pkg => (
                   <div key={pkg.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
@@ -207,7 +303,7 @@ export default function ProfilePage() {
                   </div>
                 ))}
                 {packages.length === 0 && (
-                  <p className="text-sm text-gray-500">No packages configured yet.</p>
+                  <p className="text-sm text-gray-500">No packages configured yet. Add one above.</p>
                 )}
               </div>
             </div>
